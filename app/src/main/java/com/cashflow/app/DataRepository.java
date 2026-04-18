@@ -10,15 +10,166 @@ import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
 import java.util.Locale;
+import org.json.JSONArray;
+import org.json.JSONException;
+import org.json.JSONObject;
+import android.content.Context;
+import android.content.SharedPreferences;
 
 public class DataRepository {
   public static List<Account> accounts = new ArrayList<>();
   public static List<Category> categories = new ArrayList<>();
   public static List<Budget> budgets = new ArrayList<>();
   public static List<Transaction> transactions = new ArrayList<>();
+  private static final String PREFS_NAME = "cashflow_prefs";
+
+  public static void loadFromPrefs(Context ctx) {
+    try {
+      SharedPreferences prefs = ctx.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
+      String accJson = prefs.getString("accounts", null);
+      String budJson = prefs.getString("budgets", null);
+      String txJson = prefs.getString("transactions", null);
+      if (accJson == null && budJson == null && txJson == null) {
+        initData();
+        saveToPrefs(ctx);
+        return;
+      }
+      // accounts
+      if (accJson != null) {
+        accounts.clear();
+        JSONArray arr = new JSONArray(accJson);
+        for (int i = 0; i < arr.length(); i++) {
+          JSONObject o = arr.getJSONObject(i);
+          Account a = new Account(o.getString("id"), o.getString("name"), o.getDouble("balance"), o.getString("type"), o.getString("color"));
+          accounts.add(a);
+        }
+      }
+      // budgets
+      if (budJson != null) {
+        budgets.clear();
+        JSONArray arr = new JSONArray(budJson);
+        for (int i = 0; i < arr.length(); i++) {
+          JSONObject o = arr.getJSONObject(i);
+          Budget b = new Budget(o.getString("id"), o.getString("categoryId"), o.getDouble("limit"), o.getDouble("spent"), o.getString("period"));
+          budgets.add(b);
+        }
+      }
+      // transactions
+      if (txJson != null) {
+        transactions.clear();
+        JSONArray arr = new JSONArray(txJson);
+        for (int i = 0; i < arr.length(); i++) {
+          JSONObject o = arr.getJSONObject(i);
+          Transaction t = new Transaction(
+            o.getString("id"),
+            o.getDouble("amount"),
+            parseType(o.optString("type", "expense")),
+            o.has("categoryId") ? o.optString("categoryId") : null,
+            o.optString("fromAccountId"),
+            o.has("toAccountId") ? o.optString("toAccountId") : null,
+            o.optString("description"),
+            o.optString("date"),
+            o.optBoolean("isRecurring", false),
+            o.has("frequency") && !o.isNull("frequency") ? Frequency.valueOf(o.getString("frequency").toUpperCase()) : null
+          );
+          transactions.add(t);
+        }
+      }
+    } catch (JSONException e) {
+      initData();
+    }
+  }
+
+  public static void saveToPrefs(Context ctx) {
+    SharedPreferences prefs = ctx.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
+    SharedPreferences.Editor ed = prefs.edit();
+    // accounts
+    JSONArray accArr = new JSONArray();
+    for (Account a : accounts) {
+      JSONObject o = new JSONObject();
+      try {
+        o.put("id", a.id);
+        o.put("name", a.name);
+        o.put("balance", a.balance);
+        o.put("type", a.type);
+        o.put("color", a.color);
+      } catch (JSONException ignored) {}
+      accArr.put(o);
+    }
+    ed.putString("accounts", accArr.toString());
+    // budgets
+    JSONArray budArr = new JSONArray();
+    for (Budget b : budgets) {
+      JSONObject o = new JSONObject();
+      try {
+        o.put("id", b.id);
+        o.put("categoryId", b.categoryId);
+        o.put("limit", b.limit);
+        o.put("spent", b.spent);
+        o.put("period", b.period);
+      } catch (JSONException ignored) {}
+      budArr.put(o);
+    }
+    ed.putString("budgets", budArr.toString());
+    // transactions
+    JSONArray txArr = new JSONArray();
+    for (Transaction t : transactions) {
+      JSONObject o = new JSONObject();
+      try {
+        o.put("id", t.id);
+        o.put("amount", t.amount);
+        o.put("type", t.type == null ? "expense" : t.type.name().toLowerCase());
+        if (t.categoryId != null) o.put("categoryId", t.categoryId);
+        o.put("fromAccountId", t.fromAccountId);
+        if (t.toAccountId != null) o.put("toAccountId", t.toAccountId);
+        o.put("description", t.description);
+        o.put("date", t.date);
+        o.put("isRecurring", t.isRecurring);
+        if (t.frequency != null) o.put("frequency", t.frequency.name().toLowerCase());
+      } catch (JSONException ignored) {}
+      txArr.put(o);
+    }
+    ed.putString("transactions", txArr.toString());
+    ed.apply();
+  }
+
+  public static void reverseTransaction(Transaction tx) {
+    // Reverse accounts
+    for (Account acc : accounts) {
+      if (acc.id.equals(tx.fromAccountId)) {
+        int multiplier = (tx.type == TransactionType.INCOME) ? -1 : 1;
+        acc.balance += tx.amount * multiplier;
+      }
+      if (tx.type == TransactionType.TRANSFER && acc.id.equals(tx.toAccountId)) {
+        acc.balance -= tx.amount;
+      }
+    }
+    // Reverse budgets
+    for (Budget bud : budgets) {
+      if (tx.type == TransactionType.EXPENSE && bud.categoryId != null && bud.categoryId.equals(tx.categoryId)) {
+        bud.spent = Math.max(0, bud.spent - tx.amount);
+      }
+    }
+    // Remove from transactions
+    for (int i = 0; i < transactions.size(); i++) {
+      if (transactions.get(i).id.equals(tx.id)) {
+        transactions.remove(i);
+        break;
+      }
+    }
+  }
+
+  private static TransactionType parseType(String s) {
+    if (s == null) return TransactionType.EXPENSE;
+    switch (s.toLowerCase()) {
+      case "income": return TransactionType.INCOME;
+      case "transfer": return TransactionType.TRANSFER;
+      default: return TransactionType.EXPENSE;
+    }
+  }
 
   static {
-    initData();
+    // data loaded via loadFromPrefs() at runtime
   }
 
   public static void initData() {

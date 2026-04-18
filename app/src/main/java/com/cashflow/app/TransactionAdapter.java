@@ -15,6 +15,11 @@ import java.text.SimpleDateFormat;
 
 public class TransactionAdapter extends RecyclerView.Adapter<TransactionAdapter.TxViewHolder> {
   private List<Transaction> txs = new ArrayList<>();
+  public interface OnTransactionDeleteListener {
+    void onDelete(String id);
+  }
+  private OnTransactionDeleteListener deleteListener;
+  public void setDeleteListener(OnTransactionDeleteListener l) { this.deleteListener = l; }
   public void setTransactions(List<Transaction> txs) {
     this.txs = txs != null ? txs : new ArrayList<>();
     notifyDataSetChanged();
@@ -31,6 +36,14 @@ public class TransactionAdapter extends RecyclerView.Adapter<TransactionAdapter.
     holder.title.setText(t.description);
     String sign = (t.type == TransactionType.INCOME) ? "+" : (t.type == TransactionType.TRANSFER ? "⇅" : "-");
     holder.sub.setText(sign + String.format(java.util.Locale.US, "$%.2f", t.amount));
+    // Long press to delete
+    holder.itemView.setOnLongClickListener(v -> {
+      if (deleteListener != null) {
+        deleteListener.onDelete(t.id);
+        return true;
+      }
+      return false;
+    });
   }
   @Override
   public int getItemCount() { return txs.size(); }

@@ -2,11 +2,13 @@
 apply plugin: 'com.android.application'
 
 android {
-  compileSdkVersion 31
+  namespace "com.cashflow.app"   // must match your package
+  compileSdkVersion 34
+
   defaultConfig {
     applicationId "com.cashflow.app"
     minSdkVersion 21
-    targetSdkVersion 31
+    targetSdkVersion 34
     versionCode 1
     versionName "1.0"
   }

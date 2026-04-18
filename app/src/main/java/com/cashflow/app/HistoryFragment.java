@@ -32,6 +32,12 @@ public class HistoryFragment extends Fragment {
     rvTx = view.findViewById(R.id.rv_transactions);
     rvTx.setLayoutManager(new LinearLayoutManager(getContext()));
     txAdapter = new TransactionAdapter();
+    txAdapter.setDeleteListener(new TransactionAdapter.OnTransactionDeleteListener() {
+      @Override
+      public void onDelete(String id) {
+        viewModel.deleteTransaction(id);
+      }
+    });
     rvTx.setAdapter(txAdapter);
     viewModel = new ViewModelProvider(requireActivity()).get(CFViewModel.class);
     viewModel.getTransactions().observe(getViewLifecycleOwner(), new Observer<List<Transaction>>() {
