@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string-array name="account_names">
+        <item>Daily Checking</item>
+        <item>Growth Savings</item>
+        <item>Reserve Fund</item>
+    </string-array>
+</resources>
